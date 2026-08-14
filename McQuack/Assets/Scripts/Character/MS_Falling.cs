@@ -6,6 +6,7 @@ public class MS_Falling : AMovementState
 {
     [Header("ROTATION VALUES")]
     [SerializeField] private float _fallingRotationSharpness = 10f;
+    [SerializeField] private float _uprightRotationSharpness = 2f;
 
     [Header("MOVEMENT VALUES")]
     [SerializeField] private float _maxFallMoveSpeed = 7f;
@@ -69,6 +70,18 @@ public class MS_Falling : AMovementState
 
             _characterMovement.transform.forward = smoothedLookInputDirection;
         }
+
+        //Upright character after cases like going down sliding
+
+        Vector3 forward = _characterMovement.transform.forward;
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up);
+
+        if (forward.sqrMagnitude > 0.0001f)
+        {
+            Quaternion rightedUpRot = Quaternion.LookRotation(forward, Vector3.up);
+            _characterMovement.RB.MoveRotation(Quaternion.Slerp(_characterMovement.transform.rotation, rightedUpRot, 1f - Mathf.Exp(-_uprightRotationSharpness * Time.fixedDeltaTime)));
+        }
+
     }
 
     protected override void HandleVelocity()

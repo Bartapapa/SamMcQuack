@@ -9,6 +9,8 @@ public struct PlayerInput
     public float MoveY;
     public Camera CameraRef;
 
+    public bool JumpInputHeld;
+
     public Vector2 AimVector;
 }
 
@@ -17,6 +19,8 @@ public class InputHandler : MonoBehaviour
     [Header("Controlled objects")]
     [SerializeField] private CharacterMovement _character;
     [SerializeField] private APlayerCamera _cam;
+
+    private bool _jumpInputHeld = false;
 
     private Vector2 _movement = Vector2.zero;
     private Vector2 _aim = Vector2.zero;
@@ -47,6 +51,15 @@ public class InputHandler : MonoBehaviour
         {
             _character.RequestJump();
         }
+
+        if (context.started)
+        {
+            _jumpInputHeld = true;
+        }
+        if (context.canceled)
+        {
+            _jumpInputHeld = false;
+        }
     }
 
     private void SendPlayerInputs()
@@ -55,6 +68,8 @@ public class InputHandler : MonoBehaviour
 
         playerInput.MoveX = _movement.x;
         playerInput.MoveY = _movement.y;
+
+        playerInput.JumpInputHeld = _jumpInputHeld;
 
         playerInput.CameraRef = Camera.main;
 

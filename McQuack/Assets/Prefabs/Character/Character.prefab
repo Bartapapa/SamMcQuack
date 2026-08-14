@@ -95,6 +95,7 @@ GameObject:
   - component: {fileID: 6475874589246010903}
   - component: {fileID: 8663827109222463901}
   - component: {fileID: 8505026744757755930}
+  - component: {fileID: 3993884638992381247}
   m_Layer: 3
   m_Name: Character
   m_TagString: Untagged
@@ -130,6 +131,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bee95322080cb2e4fa36901603543272, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _detector: {fileID: 3993884638992381247}
   _currentState: {fileID: 0}
   _currentStateType: 0
   _defaultState: 1
@@ -137,10 +139,7 @@ MonoBehaviour:
   _fallingState: {fileID: 5138799755111519666}
   _jumpingState: {fileID: 4383146419040667067}
   _balancingState: {fileID: 6361523952779751565}
-  _groundCheckDistance: 0.5
-  _groundLayers:
-    serializedVersion: 2
-    m_Bits: 1
+  _slidingState: {fileID: 1396806785505755481}
   _maxGroundedAngle: 40
   _canRotate: 1
   _canMove: 1
@@ -194,6 +193,88 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 112
   m_CollisionDetection: 1
+--- !u!114 &3993884638992381247
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 903608225351690582}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c97b6017763dc304592d634cdc447f6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _groundCheckRadius: 0.4
+  _groundCheckDistance: 1
+  _groundCheckOffset: 1
+  _groundLayers:
+    serializedVersion: 2
+    m_Bits: 1
+  _showGroundCheckDebug: 1
+  _wallCastRadius: 0.25
+  _wallCastDistance: 1
+  _wallMask:
+    serializedVersion: 2
+    m_Bits: 1
+  _wallCastOffset: {x: 0, y: 1.25, z: 0}
+  _showWallCheckDebug: 1
+  _groundCheckForwardOffset: 1
+  _maxLedgeHeight: 2.5
+  _minLedgeHeight: 0.5
+--- !u!1 &915242680072961789
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 557121893312982296}
+  - component: {fileID: 1396806785505755481}
+  m_Layer: 3
+  m_Name: Sliding
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &557121893312982296
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 915242680072961789}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8223713343525208484}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1396806785505755481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 915242680072961789}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 612d18c103d1e404692030b199156a66, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _slideRequestTime: 1
+  _maxSlidingMoveSpeed: 13
+  _maxSideSlidingMoveSpeed: 5
+  _sideSlidingMovementSharpness: 2
+  _slidingAcceleration: 10
+  _slidingDeceleration: 5
+  _minimumSafeSlidingSpeed: 2
+  _slidingRotationSharpness: 3
+  _slopeStickForce: -15
 --- !u!1 &1393843143826496528
 GameObject:
   m_ObjectHideFlags: 0
@@ -321,7 +402,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 69dd72971b4c40a45b39bb3579d7780e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _currentBalanceLine: {fileID: 0}
+  _currentBalancePath: {fileID: 0}
+  _currentDistanceAlongPath: 0
+  _endPointTolerance: 0.05
+  _breakingDistance: 0.75
+  _maxBalancingMoveSpeed: 5
+  _balancingMovementSharpness: 5
+  _pathTrackingSharpness: 7.5
+  _balancingRotationSharpness: 10
 --- !u!1 &2374516505472334956
 GameObject:
   m_ObjectHideFlags: 0
@@ -355,6 +443,7 @@ Transform:
   - {fileID: 6640390024961647902}
   - {fileID: 4223280604191731057}
   - {fileID: 1523241659801784509}
+  - {fileID: 557121893312982296}
   m_Father: {fileID: 4587668576756797895}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3053900223450076734
@@ -485,8 +574,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _groundedRotationSharpness: 10
-  _maxGroundedMoveSpeed: 7
+  _uprightRotationSharpness: 10
+  _maxGroundedMoveSpeed: 5
   _groundedMovementSharpness: 15
+  _groundSnapStrength: -30
 --- !u!1 &5513915882065748568
 GameObject:
   m_ObjectHideFlags: 0
@@ -682,11 +773,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _jumpRotationSharpness: 5
-  _maxJumpMoveSpeed: 7
+  _uprightRotationSharpness: 2
+  _maxJumpMoveSpeed: 5
   _jumpMovementSharpness: 25
   _jumpDrag: 0
-  _gravity: {x: 0, y: -15, z: 0}
-  _jumpStrength: 10.5
+  _gravity: -15
+  _jumpInitialStrength: 7
+  _maxJumpHeldTime: 0.25
+  _jumpHeldForce: 12
 --- !u!1 &8373752976351892293
 GameObject:
   m_ObjectHideFlags: 0
@@ -732,7 +826,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _fallingRotationSharpness: 5
-  _maxFallMoveSpeed: 7
+  _uprightRotationSharpness: 2
+  _maxFallMoveSpeed: 5
   _fallMovementSharpness: 25
   _fallDrag: 0
   _gravity: {x: 0, y: -30, z: 0}

@@ -5,17 +5,28 @@ using UnityEngine;
 public class MS_Balancing : AMovementState
 {
     [Header("OBJECT REFS")]
-    [SerializeField] private BalancePath _currentBalanceLine;
-    public BalancePath CurrentBalanceLine { get { return _currentBalanceLine; } }
+    [SerializeField] private BalancePath _currentBalancePath;
+    public BalancePath CurrentBalanceLine { get { return _currentBalancePath; } }
+    [SerializeField] private float _currentDistanceAlongPath = 0f;
+
+    [Header("END POINT TOLERANCE")]
+    [SerializeField] private float _endPointTolerance = 0.05f;
+
+    [Header("BREAKING DISTANCE")]
+    [SerializeField] private float _breakingDistance = .75f;
+
+    [Header("BALANCING MOVEMENT VALUES")]
+    [SerializeField] private float _maxBalancingMoveSpeed = 7f;
+    [SerializeField] private float _balancingMovementSharpness = 10f;
+    [SerializeField] private float _pathTrackingSharpness = 10f;
+
+    private float _currentBalancingSpeed = 0f;
 
     [Header("BALANCING ROTATION VALUES")]
     [SerializeField] private float _balancingRotationSharpness = 10f;
 
     private CharacterMovement _characterMovement;
-
-    private int _currentPoint = 0;
-    private int _nextPoint = 0;
-    private bool _facingForward = true;
+    private SplinePath.SplineSample _currentSample;
 
     public override void OnStateEnter(CharacterMovement character)
     {
@@ -23,13 +34,15 @@ public class MS_Balancing : AMovementState
 
         character.SetStateType(EMovementStates.Balancing);
         _characterMovement = character;
+
+        AnchorToCurrentPath();
     }
 
     public override void OnStateExit(CharacterMovement character)
     {
         base.OnStateExit(character);
 
-        _currentBalanceLine = null;
+        _currentBalancePath = null;
     }
 
     public override void OnStateUpdate(CharacterMovement character)
@@ -42,7 +55,10 @@ public class MS_Balancing : AMovementState
         base.OnStateFixedUpdate(character);
 
 
-        if (_currentBalanceLine == null) return;
+        if (_currentBalancePath == null) return;
+
+        _currentSample = _currentBalancePath.Path.EvaluateAtDistance(_currentDistanceAlongPath);
+
         HandleRotation();
         HandleVelocity();
     }
@@ -54,61 +70,124 @@ public class MS_Balancing : AMovementState
         //If at last point, use previous rotation direction.
 
         //If moveinput direction is beyond a certain dotproduct compared to current facing and sides, then TurnAround();
+        Vector3 toLookVector = GetLookDirFromSplineTangent(_currentSample.Tangent) * Mathf.Sign(_currentBalancingSpeed);
 
-        //Vector3 currentPointNoY = new Vector3(_currentBalanceLine.BalanceLinePoints[_currentPoint].position.x, 0f, _currentBalanceLine.BalanceLinePoints[_currentPoint].position.z);
-        //Vector3 nextPointNoY = new Vector3(_currentBalanceLine.BalanceLinePoints[_nextPoint].position.x, 0f, _currentBalanceLine.BalanceLinePoints[_nextPoint].position.z);
-        //Vector3 nextPointDir = Vector3.Normalize(nextPointNoY - currentPointNoY);  
-        //Vector3 toLookVector = nextPointDir;
+        Vector3 smoothedLookInputDirection = _characterMovement.transform.forward;
 
-        //float toRotationSharpness = _balancingRotationSharpness;
+        if (toLookVector.sqrMagnitude > 0f && _balancingRotationSharpness > 0f)
+        {
+            smoothedLookInputDirection = Vector3.Slerp(transform.forward, toLookVector, 1 - Mathf.Exp(-_balancingRotationSharpness * Time.fixedDeltaTime)).normalized;
 
-        //Vector3 smoothedLookInputDirection = _characterMovement.transform.forward;
+            _characterMovement.transform.forward = smoothedLookInputDirection;
+        }
+        else
+        {
+            smoothedLookInputDirection = Vector3.Slerp(transform.forward, transform.forward, 1 - Mathf.Exp(-_balancingRotationSharpness * Time.fixedDeltaTime)).normalized;
 
-        //if (toLookVector.sqrMagnitude > 0f && toRotationSharpness > 0f)
-        //{
-        //    smoothedLookInputDirection = Vector3.Slerp(transform.forward, toLookVector, 1 - Mathf.Exp(-toRotationSharpness * Time.fixedDeltaTime)).normalized;
-
-        //    _characterMovement.transform.forward = smoothedLookInputDirection;
-        //}
-        //else
-        //{
-        //    smoothedLookInputDirection = Vector3.Slerp(transform.forward, transform.forward, 1 - Mathf.Exp(-toRotationSharpness * Time.fixedDeltaTime)).normalized;
-
-        //    _characterMovement.transform.forward = smoothedLookInputDirection;
-        //}
+            _characterMovement.transform.forward = smoothedLookInputDirection;
+        }
     }
 
     protected override void HandleVelocity()
     {
-        //Move character in direction of next point on currentbalanceline.
-        //If character has arrived at next point, set current point as that point and next point to the one further.
-        //In the case where they've reached the end of all points, can Transition off of balancing movementmode.
-    }
+        //Find reoriented input depending on groundhit normal, for moving on slopes.
+        float inputMagnitude = Mathf.Clamp01(_characterMovement.MoveInputVector.magnitude);
+        Vector3 balanceNormal = _currentSample.Up.normalized;
+        Vector3 input = _characterMovement.MoveInputVector;
+        Vector3 reorientedInput = Vector3.zero;
 
-    public void SetBalanceLine(BalancePath balanceLine)
-    {
-        _currentBalanceLine = balanceLine;
-    }
-
-    private void SetNextPoint()
-    {
-        if (_facingForward)
+        if(inputMagnitude > 0.001f)
         {
-            _currentPoint++;
-            _nextPoint++;
+            Vector3 inputRight = Vector3.Cross(input, Vector3.up);
+
+            reorientedInput = Vector3.Cross(balanceNormal, inputRight).normalized;
+        }
+
+        Vector3 currentSampleTangent = _currentSample.Tangent.normalized;
+
+        float dotProductAlignment = 0f;
+
+        if (inputMagnitude > 0.001f)
+        {
+            dotProductAlignment = Vector3.Dot(reorientedInput, currentSampleTangent);
+        }
+
+        float targetSpeed = dotProductAlignment * inputMagnitude * _maxBalancingMoveSpeed;
+        _currentBalancingSpeed = Mathf.Lerp(_currentBalancingSpeed, targetSpeed, 1f - Mathf.Exp(-_balancingMovementSharpness * Time.fixedDeltaTime));
+
+        _currentDistanceAlongPath += _currentBalancingSpeed * Time.fixedDeltaTime;
+        _currentDistanceAlongPath = Mathf.Clamp(_currentDistanceAlongPath, 0f, _currentBalancePath.Path.Length);
+
+        SplinePath.SplineSample sample = _currentBalancePath.Path.EvaluateAtDistance(_currentDistanceAlongPath);
+
+        Vector3 positionError = sample.Position - _characterMovement.RB.position;
+        Vector3 correctionVelocity = positionError * _pathTrackingSharpness;
+
+        Vector3 targetVelocity = sample.Tangent.normalized * _currentBalancingSpeed;
+        targetVelocity += correctionVelocity;
+        _characterMovement.RB.velocity = targetVelocity;
+    }
+
+    public void UseBalancePath(BalancePath balancePath)
+    {
+        _currentBalancePath = balancePath;
+    }
+
+    private void AnchorToCurrentPath()
+    {
+        float distanceOnPath = _currentBalancePath.Path.GetClosestDistance(_characterMovement.transform.position);
+        _currentDistanceAlongPath = distanceOnPath;
+        _currentBalancingSpeed = 0f;
+
+        Vector3 rbVel = _characterMovement.RB.velocity;
+        _currentBalancingSpeed = GetInitialSpeed();
+
+        _characterMovement.RB.velocity = new Vector3(rbVel.x, 0f, rbVel.z);
+    }
+
+    private float GetInitialSpeed()
+    {
+        Vector3 rbVel = _characterMovement.RB.velocity;
+        Vector3 rbVelNoY = new Vector3(rbVel.x, 0f, rbVel.z);
+        float velMagnitude = rbVelNoY.sqrMagnitude;
+        float dotProductAlignment = 0f;
+        if (velMagnitude > 0.001f)
+        {
+            dotProductAlignment = Vector3.Dot(rbVelNoY, _currentBalancePath.Path.EvaluateAtDistance(_currentDistanceAlongPath).Tangent);
+        }
+
+        float initialSpeed = Mathf.Sqrt(velMagnitude) * Mathf.Sign(dotProductAlignment);
+        return initialSpeed;
+    }
+
+    private Vector3 GetLookDirFromSplineTangent(Vector3 tangent)
+    {
+        Vector3 lookDir = _characterMovement.transform.forward;
+        lookDir = new Vector3(tangent.x, 0f, tangent.z).normalized;
+
+        return lookDir;
+    }
+
+    public bool IsOnBalancePath()
+    {
+        if (!_characterMovement.IsGrounded)
+        {
+            return false;
         }
         else
         {
-            _currentPoint--;
-            _nextPoint--;
-        }
-    }
-    private void TurnAround()
-    {
-        int localCurrent = _currentPoint;
-        int localNext = _nextPoint;
+            Vector3 offset = _characterMovement.RB.position - _currentSample.Position;
+            Vector3 splineRight = Vector3.Cross(_currentSample.Up, _currentSample.Tangent).normalized;
+            float lateralDistance = Mathf.Abs(Vector3.Dot(offset, splineRight));
 
-        _currentPoint = localNext;
-        _nextPoint = localCurrent;
+            //If too far away laterally, or reached the end and moving in that direction, transition out of balancing.
+            if (lateralDistance > _breakingDistance ||
+                (_currentDistanceAlongPath <= _endPointTolerance && _currentBalancingSpeed < 0f) ||
+                (_currentDistanceAlongPath >= (_currentBalancePath.Path.Length - _endPointTolerance) && _currentBalancingSpeed > 0f))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }

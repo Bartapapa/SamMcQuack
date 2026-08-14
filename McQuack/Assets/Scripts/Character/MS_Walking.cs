@@ -7,10 +7,14 @@ public class MS_Walking : AMovementState
 {
     [Header("ROTATION VALUES")]
     [SerializeField] private float _groundedRotationSharpness = 10f;
+    [SerializeField] private float _uprightRotationSharpness = 10f;
 
     [Header("GROUNDED MOVEMENT VALUES")]
     [SerializeField] private float _maxGroundedMoveSpeed = 7f;
     [SerializeField] private float _groundedMovementSharpness = 15f;
+
+    [Header("SNAP TO GROUND")]
+    [SerializeField] private float _groundSnapStrength = -30f;
 
     private CharacterMovement _characterMovement;
 
@@ -68,12 +72,23 @@ public class MS_Walking : AMovementState
 
             _characterMovement.transform.forward = smoothedLookInputDirection;
         }
+
+        //Upright character after cases like going down sliding
+
+        Vector3 forward = _characterMovement.transform.forward;
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up);
+
+        if (forward.sqrMagnitude > 0.0001f)
+        {
+            Quaternion rightedUpRot = Quaternion.LookRotation(forward, Vector3.up);
+            _characterMovement.RB.MoveRotation(Quaternion.Slerp(_characterMovement.transform.rotation, rightedUpRot, 1f - Mathf.Exp(-_uprightRotationSharpness * Time.fixedDeltaTime)));
+        }
     }
 
     protected override void HandleVelocity()
     {
         //Find reoriented input depending on groundhit normal, for moving on slopes.
-        Vector3 groundNormal = _characterMovement.GroundHit.normal;
+        Vector3 groundNormal = _characterMovement.GroundDetectionDescriptor.Normal;
         Vector3 inputRight = Vector3.Cross(_characterMovement.MoveInputVector, Vector3.up);
         Vector3 reorientedInput = Vector3.Cross(groundNormal, inputRight).normalized * _characterMovement.MoveInputVector.magnitude;
 
@@ -83,5 +98,8 @@ public class MS_Walking : AMovementState
         if (!_characterMovement.CanMove) targetMovementVelocity = Vector3.zero;
 
         _characterMovement.RB.velocity = Vector3.Lerp(_characterMovement.RB.velocity, targetMovementVelocity, 1f - Mathf.Exp(-_groundedMovementSharpness * Time.fixedDeltaTime));
+
+        Vector3 groundSnapForce = _characterMovement.GroundDetectionDescriptor.Normal * _groundSnapStrength;
+        _characterMovement.RB.velocity += groundSnapForce * Time.fixedDeltaTime;
     }
 }

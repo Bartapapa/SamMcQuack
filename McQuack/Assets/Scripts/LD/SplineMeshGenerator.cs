@@ -62,19 +62,39 @@ public class SplineMeshGenerator : MonoBehaviour
 
     [Header("Output")]
     [SerializeField]
-    private bool generateCollider = false;
-
-    [SerializeField]
     private bool recalculateNormals = false;
 
     [SerializeField]
     private bool recalculateTangents = false;
+
+    [Header("Physical collisions")]
+    [SerializeField]
+    private bool generateCollider = false;
+
+    [SerializeField]
+    private bool generateMeshCollider = false;
+
+    [SerializeField]
+    private float collisionWidth = 0.2f;
+
+    [SerializeField]
+    private float collisionHeight = 0.2f;
+
+    [SerializeField]
+    private float collisionSpacing = 0.5f;
+
+    [SerializeField]
+    private Vector3 collisionOffset = Vector3.zero;
+
+    [SerializeField]
+    private int collisionLayer;
 
     private SplinePath spline;
     private MeshFilter meshFilter;
     private MeshRenderer meshRenderer;
 
     private Mesh generatedMesh;
+    private Transform collisionRoot;
 
     private bool dirty = true;
 
@@ -308,6 +328,8 @@ public class SplineMeshGenerator : MonoBehaviour
         }
 
         FinishMesh();
+
+        GenerateCollision();
 
         dirty = false;
     }
@@ -603,8 +625,6 @@ public class SplineMeshGenerator : MonoBehaviour
 
         meshRenderer.sharedMaterials =
             materials;
-
-        UpdateCollider();
     }
 
     private void EnsureSubmeshLists(int count)
@@ -613,6 +633,195 @@ public class SplineMeshGenerator : MonoBehaviour
         {
             submeshTriangles.Add(
                 new List<int>());
+        }
+    }
+
+    private void GenerateCollision()
+    {
+        if (!generateCollider)
+        {
+            ClearGeneratedCollision();
+            return;
+        }
+
+        if (generateMeshCollider)
+        {
+            ClearGeneratedCollision();
+
+            MeshCollider collider =
+    GetComponent<MeshCollider>();
+
+            if (collider == null)
+            {
+                collider =
+                    gameObject.AddComponent<MeshCollider>();
+            }
+
+            collider.sharedMesh = null;
+            collider.sharedMesh = generatedMesh;
+            return;
+        }
+
+        if (spline == null ||
+            spline.PointCount < 2 ||
+            spline.Length <= Mathf.Epsilon)
+            return;
+
+        EnsureCollisionRoot();
+        ClearGeneratedCollision();
+
+        float splineLength = spline.Length;
+
+        float spacing =
+            Mathf.Max(
+                collisionSpacing,
+                0.05f);
+
+        for (float distance = 0f;
+             distance < splineLength;
+             distance += spacing)
+        {
+            float nextDistance =
+                Mathf.Min(
+                    distance + spacing,
+                    splineLength);
+
+            SplinePath.SplineSample start =
+                spline.EvaluateAtDistance(distance);
+
+            SplinePath.SplineSample end =
+                spline.EvaluateAtDistance(nextDistance);
+
+            CreateCollisionBox(
+                start,
+                end);
+        }
+    }
+
+    private void CreateCollisionBox(
+    SplinePath.SplineSample start,
+    SplinePath.SplineSample end)
+    {
+        Vector3 startPosition =
+            start.Position;
+
+        Vector3 endPosition =
+            end.Position;
+
+        Vector3 direction =
+            endPosition - startPosition;
+
+        float length =
+            direction.magnitude;
+
+        if (length <= Mathf.Epsilon)
+            return;
+
+        GameObject colliderObject =
+            new GameObject("Collider");
+
+        colliderObject.transform.SetParent(
+            collisionRoot,
+            false);
+
+        colliderObject.layer =
+            collisionLayer;
+
+        Vector3 center =
+            (startPosition + endPosition) * 0.5f;
+
+        Vector3 tangent =
+            direction.normalized;
+
+        Vector3 up =
+            Vector3.Slerp(
+                start.Up,
+                end.Up,
+                0.5f).normalized;
+
+        Vector3 right =
+            Vector3.Cross(
+                up,
+                tangent).normalized;
+
+        up =
+            Vector3.Cross(
+                tangent,
+                right).normalized;
+
+        Vector3 offset =
+            right * collisionOffset.x +
+            up * collisionOffset.y +
+            tangent * collisionOffset.z;
+
+        colliderObject.transform.position =
+            center + offset;
+
+        colliderObject.transform.rotation =
+            Quaternion.LookRotation(
+                direction.normalized,
+                start.Up);
+
+        BoxCollider collider =
+            colliderObject.AddComponent<BoxCollider>();
+
+        collider.isTrigger = false;
+
+        // Tiny overlap prevents microscopic gaps
+        // between adjacent collision sections.
+        collider.size =
+            new Vector3(
+                collisionWidth,
+                collisionHeight,
+                length + 0.02f);
+    }
+
+    private void EnsureCollisionRoot()
+    {
+        if (collisionRoot != null)
+            return;
+
+        Transform existing =
+            transform.Find("Generated Collision");
+
+        if (existing != null)
+        {
+            collisionRoot = existing;
+            return;
+        }
+
+        GameObject root =
+            new GameObject("Generated Collision");
+
+        collisionRoot = root.transform;
+
+        collisionRoot.SetParent(
+            transform,
+            false);
+    }
+
+    private void ClearGeneratedCollision()
+    {
+        if (collisionRoot == null)
+            return;
+
+        for (int i = collisionRoot.childCount - 1;
+             i >= 0;
+             i--)
+        {
+            GameObject child =
+                collisionRoot.GetChild(i).gameObject;
+
+            if (Application.isPlaying)
+                Destroy(child);
+            else
+                DestroyImmediate(child);
+        }
+
+        MeshCollider existing = GetComponent<MeshCollider>();
+        if (existing)
+        {
+            DestroyImmediate(existing);
         }
     }
 
@@ -640,24 +849,6 @@ public class SplineMeshGenerator : MonoBehaviour
 
         if (collider != null)
             collider.sharedMesh = null;
-    }
-
-    private void UpdateCollider()
-    {
-        if (!generateCollider)
-            return;
-
-        MeshCollider collider =
-            GetComponent<MeshCollider>();
-
-        if (collider == null)
-        {
-            collider =
-                gameObject.AddComponent<MeshCollider>();
-        }
-
-        collider.sharedMesh = null;
-        collider.sharedMesh = generatedMesh;
     }
 
     private void OnValidate()

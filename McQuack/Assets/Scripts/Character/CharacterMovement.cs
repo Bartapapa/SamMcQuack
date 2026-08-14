@@ -10,10 +10,15 @@ public enum EMovementStates
     Falling,
     Jumping,
     Balancing,
+    Sliding,
 }
 
 public class CharacterMovement : MonoBehaviour
 {
+    [Header("OBJECT REFERENCES")]
+    [SerializeField] private EnvironmentDetector _detector;
+    public EnvironmentDetector Detector { get { return _detector; } }
+
     [Header("STATES")]
     [SerializeField] private AMovementState _currentState = null;
     public AMovementState CurrentState { get { return _currentState; } }
@@ -24,11 +29,15 @@ public class CharacterMovement : MonoBehaviour
     [SerializeField] private MS_Falling _fallingState;
     [SerializeField] private MS_Jumping _jumpingState;
     [SerializeField] private MS_Balancing _balancingState;
+    [SerializeField] private MS_Sliding _slidingState;
 
-    [Header("GROUNDCHECK")]
-    [SerializeField] private float _groundCheckDistance = .5f;
-    [SerializeField] private LayerMask _groundLayers;
+    [Header("GROUNDING")]
     [SerializeField] private float _maxGroundedAngle = 60f;
+    public float MaxGroundedAngle { get { return _maxGroundedAngle; } }
+
+    [Header("SLIDING")]
+    [SerializeField] private float _maxSlopeAngle = 80f;
+    public float MaxSlopeAngle { get { return _maxSlopeAngle; } }
 
     [Header("GENERAL PARAMETERS")]
     [SerializeField] private bool _canRotate = true;
@@ -48,12 +57,20 @@ public class CharacterMovement : MonoBehaviour
     private Vector3 _lookInputVector;
     public Vector3 LookInputVector { get { return _lookInputVector; } }
 
+    private GroundDetectionDescriptor _groundDetectionDescriptor;
+    public GroundDetectionDescriptor GroundDetectionDescriptor { get { return _groundDetectionDescriptor; } }
     private bool _isGrounded = false;
+    private bool _isGroundedPreviousFrame = false;
     public bool IsGrounded { get { return _isGrounded; } }
-    private RaycastHit _groundHit;
-    public RaycastHit GroundHit { get { return _groundHit; } }
+    private bool _groundDetected = false;
+    public bool GroundDetected { get { return _groundDetected; } }
 
-    public bool CanJump { get { return _isGrounded ? true : false; } }
+    public bool CanJump { get { return _groundDetected; } }
+    private bool _jumpInputHeld = false;
+    public bool JumpInputHeld { get { return _jumpInputHeld; } }
+
+    private bool _slidePossible = false;
+    private float _slideRequestTimer = 0f;
 
     private bool _canTransitionFromState = true;
 
@@ -109,7 +126,8 @@ public class CharacterMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        _isGrounded = GroundCheck();
+        WallCheck();
+        GroundCheck();
 
         HandleStateTransitions();
 
@@ -117,8 +135,6 @@ public class CharacterMovement : MonoBehaviour
         {
             CurrentState.OnStateFixedUpdate(this);
         }
-
-        _canTransitionFromState = true;
     }
 
     #region STATEMACHINE
@@ -141,7 +157,7 @@ public class CharacterMovement : MonoBehaviour
 
     private void HandleStateTransitions()
     {
-        if (!_canTransitionFromState) return;
+        BalancePath balancePath; 
 
         switch (_currentStateType)
         {
@@ -151,16 +167,45 @@ public class CharacterMovement : MonoBehaviour
                 if (!_isGrounded)
                 {
                     TransitionToState(_fallingState);
+                    break;
                 }
-                break;
+
+                balancePath = _detector.GroundHit.collider.GetComponentInParent<BalancePath>();
+                if (balancePath)
+                {
+                    StartBalance(balancePath);
+                    break;
+                }
+                else
+                {
+                    TransitionToState(_walkingState);
+                    break;
+                }
             case EMovementStates.Falling:
                 if (_isGrounded)
                 {
-                    TransitionToState(_walkingState);
+                    balancePath = _detector.GroundHit.collider.GetComponentInParent<BalancePath>();
+                    if (balancePath)
+                    {
+                        StartBalance(balancePath);
+                        break;
+                    }
+                    else
+                    {
+                        TransitionToState(_walkingState);
+                        break;
+                    }
                 }
-                break;
+                else
+                {
+                    if (_slidePossible && (_slideRequestTimer >= _slidingState.SlideRequestTime || (_detector.FacingSlope() > .5f && _slideRequestTimer >= .2f)))
+                    {
+                        TransitionToState(_slidingState);
+                    }
+                    break;
+                }
             case EMovementStates.Jumping:
-                if(_rb.velocity.y <= 0)
+                if(_rb.velocity.y <= 0 && _jumpingState.HasLeftGround)
                 {
                     TransitionToState(_fallingState);
                     //Call reach jump apex
@@ -170,6 +215,27 @@ public class CharacterMovement : MonoBehaviour
                 if (_balancingState.CurrentBalanceLine == null)
                 {
                     TransitionToState(_walkingState);
+                    break;
+                }
+                if (!_balancingState.IsOnBalancePath())
+                {
+                    TransitionToState(_walkingState);
+                    break;
+                }
+                break;
+            case EMovementStates.Sliding:
+                if (!_isGrounded && !_slidePossible)
+                {
+                    TransitionToState(_walkingState);
+                    break;
+                }
+                else
+                {
+                    if (_slidingState.CurrentSlidingSpeed <= _slidingState.MinimumSafeSlidingSpeed && !_slidingState.OnSteepSlope)
+                    {
+                        TransitionToState(_walkingState);
+                        break;
+                    }
                 }
                 break;
             default:
@@ -178,23 +244,57 @@ public class CharacterMovement : MonoBehaviour
     }
 
     #endregion
-    #region GROUNDING
-    private bool GroundCheck()
+    #region ENVIRONMENT DETECTION
+    private void GroundCheck()
     {
-        bool localIsGrounded = Physics.SphereCast(transform.position + (transform.up * .5f), .2f, Vector3.down, out _groundHit, _groundCheckDistance, _groundLayers, QueryTriggerInteraction.Ignore);
-        if (localIsGrounded)
+        if (Detector.GroundCheck(_maxGroundedAngle, _maxSlopeAngle, out var ground))
         {
-            float angle = Vector3.Angle(Vector3.up, _groundHit.normal);
-            localIsGrounded = angle <= _maxGroundedAngle ? true : false;
-        }
+            _groundDetectionDescriptor = ground;
 
-        if (localIsGrounded && !_isGrounded)
+            _groundDetected = true;
+            _isGrounded = ground.WalkableGroundDetected;
+            _slidePossible = ground.SteepSlopeDetected;
+
+            if (_isGrounded && !_isGroundedPreviousFrame)
+            {
+                //On land
+            }
+            _isGroundedPreviousFrame = _isGrounded;
+
+            if (_slidePossible && _currentStateType != EMovementStates.Sliding)
+            {
+                _slideRequestTimer += Time.fixedDeltaTime;
+            }
+        }
+        else
         {
-            //On land
-        }
+            _groundDetected = false;
+            _isGrounded = false;
+            _slidePossible = false;
 
-        return localIsGrounded;
+            _slideRequestTimer = 0f;
+        }
     }
+
+    private void WallCheck()
+    {
+        if (_detector.WallCheck(
+transform.position + _detector.WallCastOffset,
+transform.forward,
+out WallDetectionDescriptor wall))
+        {
+            Debug.DrawRay(
+                wall.Point,
+                wall.Normal,
+                Color.green);
+
+            Debug.DrawRay(
+                wall.Point,
+                Vector3.up * 0.2f,
+                Color.green);
+        }
+    }
+
     #endregion
     #region INPUTS
     public void SetInputs(ref PlayerInput input)
@@ -210,6 +310,8 @@ public class CharacterMovement : MonoBehaviour
         _moveInputVector = desiredMoveInputVector;
 
         _lookInputVector = _moveInputVector.normalized;
+
+        _jumpInputHeld = input.JumpInputHeld;
     }
 
     public void RequestJump()
@@ -217,14 +319,13 @@ public class CharacterMovement : MonoBehaviour
         if (CanJump)
         {
             TransitionToState(_jumpingState);
-            _canTransitionFromState = false;
         }
     }
     #endregion
     #region BALANCING
-    public void StartBalance(BalancePath balanceLine)
+    public void StartBalance(BalancePath balancePath)
     {
-        _balancingState.SetBalanceLine(balanceLine);
+        _balancingState.UseBalancePath(balancePath);
         TransitionToState(_balancingState);
     }
     #endregion
