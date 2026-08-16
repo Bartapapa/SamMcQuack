@@ -59,6 +59,10 @@ public class CharacterMovement : MonoBehaviour
     public bool JumpInputHeld { get { return _jumpInputHeld; } }
 
     [Header("LEDGES")]
+    [SerializeField] private float _groundedMaxLedgeHeight = 2.5f;
+    [SerializeField] private float _groundedMinLedgeHeight = .5f;
+    [SerializeField] private float _airborneMaxLedgeHeight = 1f;
+    [SerializeField] private float _airborneMinLedgeHeight = .5f;
     [SerializeField] private float _ledgeStandingPointClearance = .5f;
     [SerializeField] private float _minimumLedgeGrabHeight = 2f;
     [SerializeField] private float _grabToMantleMinimumAlignment = .5f;
@@ -106,8 +110,6 @@ public class CharacterMovement : MonoBehaviour
 
     private void InitializeCharacterMovement()
     {
-        _camManager = CameraManager.Instance;
-
         _rb = GetComponent<Rigidbody>();
         if (_rb == null)
         {
@@ -131,10 +133,6 @@ public class CharacterMovement : MonoBehaviour
                 Debug.LogWarning(this.name + " doesn't have a valid default movement state.");
                 break;
         }
-
-        _camManager.InitializeCameraManagerFromState(_defaultState);
-        MovementStateTransitioned -= _camManager.OnMovementStateTransitioned;
-        MovementStateTransitioned += _camManager.OnMovementStateTransitioned;
     }
 
     private void Update()
@@ -171,7 +169,9 @@ public class CharacterMovement : MonoBehaviour
         _currentState = toState;
         toState.OnStateEnter(this);
 
-        MovementStateTransitioned?.Invoke(oldState.StateEnum, toState.StateEnum);
+        EMovementStates fromState = oldState ? oldState.StateEnum : EMovementStates.None;
+
+        MovementStateTransitioned?.Invoke(fromState, toState.StateEnum);
     }
 
     public void SetStateType(EMovementStates type)
@@ -345,13 +345,16 @@ out WallDetectionDescriptor wall))
 
     private void LedgeCheck()
     {
-        if (_detector.LedgeCheck(transform.position + _detector.WallCastOffset, transform.forward, _ledgeStandingPointClearance, _maxGroundedAngle, out var ledge))
+        float maxLedgeHeight = _isGrounded ? _groundedMaxLedgeHeight : _airborneMaxLedgeHeight;
+        float minLedgeHeight = _isGrounded ? _groundedMinLedgeHeight : _airborneMinLedgeHeight;
+
+        if (_detector.LedgeCheck(transform.position + _detector.WallCastOffset, transform.forward, maxLedgeHeight, minLedgeHeight, _ledgeStandingPointClearance, _maxGroundedAngle, out var ledge))
         {
             _ledgeDetectionDescriptor = ledge;
 
             if (_detector.CanCharacterFit(ledge.StandPoint, _capsule.height, _capsule.radius, _environmentMask))
             {
-                float ledgeHeightRelativeToPosition = ledge.WallHitToGroundHitHeight + _detector.WallCastOffset.y;
+                float ledgeHeightRelativeToPosition = ledge.WallHitToGroundHitHeight + _detector.WallCastOffset.y - _groundDetectionDescriptor.Point.y;
                 if (ledgeHeightRelativeToPosition <= _minimumLedgeGrabHeight)
                 {
                     _canMantle = true;

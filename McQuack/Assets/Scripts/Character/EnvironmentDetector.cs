@@ -83,8 +83,6 @@ public class EnvironmentDetector : MonoBehaviour
 
     [Header("LEDGE DETECTION")]
     [SerializeField] private float _groundCheckForwardOffset = .1f;
-    [SerializeField] private float _maxLedgeHeight = 1.5f;
-    [SerializeField] private float _minLedgeHeight = .25f;
     [SerializeField] private bool _showLedgeCheckDebug = true;
 
     [Header("CAN FIT")]
@@ -139,18 +137,18 @@ public class EnvironmentDetector : MonoBehaviour
         return false;
     }
 
-    public bool LedgeCheck(Vector3 origin, Vector3 direction, float standPointClearance, float maximumLedgeSlope, out LedgeDetectionDescriptor ledge)
+    public bool LedgeCheck(Vector3 origin, Vector3 direction, float maxLedgeHeight, float minLedgeHeight, float standPointClearance, float maximumLedgeSlope, out LedgeDetectionDescriptor ledge)
     {
         ledge = default;
         bool check = false;
 
         if (!WallCheck(origin, direction, out WallDetectionDescriptor wallHit)) return false;
 
-        Vector3 groundCheckOrigin = origin + Vector3.up * _maxLedgeHeight - wallHit.Normal * _groundCheckForwardOffset;
-        if (!Physics.Raycast(groundCheckOrigin, Vector3.down, out RaycastHit groundHit, _maxLedgeHeight, _wallMask, QueryTriggerInteraction.Ignore)) return false;
+        Vector3 groundCheckOrigin = origin + Vector3.up * maxLedgeHeight - wallHit.Normal * _groundCheckForwardOffset;
+        if (!Physics.Raycast(groundCheckOrigin, Vector3.down, out RaycastHit groundHit, maxLedgeHeight, _wallMask, QueryTriggerInteraction.Ignore)) return false;
 
         float height = groundHit.point.y - wallHit.Point.y;
-        if (height < _minLedgeHeight || height > _maxLedgeHeight) return false;
+        if (height < minLedgeHeight || height > maxLedgeHeight) return false;
 
         float slopeAngle = Vector3.Angle(groundHit.normal, Vector3.up);
         if (slopeAngle > maximumLedgeSlope) return false;
@@ -159,7 +157,7 @@ public class EnvironmentDetector : MonoBehaviour
 
         if (_showLedgeCheckDebug)
         {
-            Debug.DrawRay(groundCheckOrigin, Vector3.down * (_maxLedgeHeight), Color.cyan);
+            Debug.DrawRay(groundCheckOrigin, Vector3.down * maxLedgeHeight, Color.cyan);
         }
 
         check = true;

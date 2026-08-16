@@ -20,6 +20,7 @@ public class CameraManager : Singleton<CameraManager>
     [Header("OBJECT REFS")]
     [SerializeField] private CinemachineVirtualCamera _cam;
     [SerializeField] private Transform _followTarget;
+    [SerializeField] private CharacterMovement _character;
     private Cinemachine3rdPersonFollow _follow;
 
     [Header("CAMERA STATES")]
@@ -44,6 +45,7 @@ public class CameraManager : Singleton<CameraManager>
     private CameraParameters _targetParameters;
     private float _transitionTimer = 0f;
     private float _transitionDuration = 0f;
+    private AnimationCurve _transitionCurve;
 
     private Vector2 _aimVector = Vector2.zero;
     private float _targetYaw;
@@ -66,6 +68,10 @@ public class CameraManager : Singleton<CameraManager>
     private void Start()
     {
         _follow = _cam.GetCinemachineComponent<Cinemachine3rdPersonFollow>();
+
+        InitializeCameraManager();
+        _character.MovementStateTransitioned -= OnMovementStateTransitioned;
+        _character.MovementStateTransitioned += OnMovementStateTransitioned;
     }
 
     private void LateUpdate()
@@ -74,8 +80,6 @@ public class CameraManager : Singleton<CameraManager>
         ApplyCurrentCameraParameters();
 
         HandleOrbiting();
-
-        if (_targetParamsDirty) RecalculateTargetParameters(_targetState);
     }
 
     #region STATE HANDLING
@@ -83,17 +87,11 @@ public class CameraManager : Singleton<CameraManager>
     {
         if (_targetState == toState || toState == null) return;
 
-        //CameraParameters targetParams = GetModifiedCameraParameters(GetStateParameters(toState), GetModifierTotals(_camModifiers));
-
-        //_initialParameters = noTransition ? targetParams : _currentParameters;
-        //_targetParameters = targetParams;
-
         _targetState = toState;
 
-        //_transitionTimer = noTransition ? toState.TransitionDuration : 0f;
-        //_transitionDuration = toState.TransitionDuration;
+        float transitionDuration = noTransition ? 0f : toState.TransitionDuration;
 
-        RecalculateTargetParameters(toState, noTransition);
+        RecalculateTargetParameters(transitionDuration, toState.TransitionCurve);
     }
 
     public void TransitionToState(SO_CameraState toState, bool clearModifiers) => TransitionToState(toState, clearModifiers, false);
@@ -103,30 +101,21 @@ public class CameraManager : Singleton<CameraManager>
         if (_currentCamModifiers.Contains(modifier)) return;
         _currentCamModifiers.Add(modifier);
 
-        _targetParamsDirty = true;
+        RecalculateTargetParameters(modifier.TransitionDuration, modifier.TransitionCurve);
     }
 
     public void RemoveCameraModifier(SO_CameraState modifier)
     {
         _currentCamModifiers.Remove(modifier);
 
-        _targetParamsDirty = true;
+        RecalculateTargetParameters(_targetState.TransitionDuration, _targetState.TransitionCurve);
     }
 
-    public void InitializeCameraManagerFromState(EMovementStates movementState)
+    public void InitializeCameraManager()
     {
-        SO_CameraState camState = null;
-
         _currentCamModifiers.Clear();
 
-        switch (movementState)
-        {
-            default:
-                camState = _explorationState;
-                break;
-        }
-
-        TransitionToState(camState, false, true);
+        TransitionToState(_explorationState, false, true);
     }
 
     private void HandleCameraTransition()
@@ -211,15 +200,16 @@ public class CameraManager : Singleton<CameraManager>
         _cam.m_Lens.FieldOfView = _currentParameters.FOV;
     }
 
-    private void RecalculateTargetParameters(SO_CameraState toState, bool noTransition = false)
+    private void RecalculateTargetParameters(float transitionDuration, AnimationCurve transitionCurve)
     {
-        CameraParameters targetParams = GetModifiedCameraParameters(GetStateParameters(toState), GetModifierTotals(_currentCamModifiers));
+        CameraParameters targetParams = GetModifiedCameraParameters(GetStateParameters(_targetState), GetModifierTotals(_currentCamModifiers));
 
-        _initialParameters = noTransition ? targetParams : _currentParameters;
+        _initialParameters = transitionDuration == 0f ? targetParams : _currentParameters;
         _targetParameters = targetParams;
 
-        _transitionTimer = noTransition ? toState.TransitionDuration : 0f;
-        _transitionDuration = toState.TransitionDuration;
+        _transitionTimer = 0f;
+        _transitionDuration = transitionDuration;
+        _transitionCurve = transitionCurve;
 
         _targetParamsDirty = false;
     }

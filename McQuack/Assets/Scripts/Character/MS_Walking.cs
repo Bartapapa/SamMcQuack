@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using UnityEditor.PackageManager.UI;
 using UnityEngine;
 
 public class MS_Walking : AMovementState
@@ -14,7 +15,7 @@ public class MS_Walking : AMovementState
     [SerializeField] private float _groundedMovementSharpness = 15f;
 
     [Header("SNAP TO GROUND")]
-    [SerializeField] private float _groundSnapStrength = -30f;
+    [SerializeField] private float _groundSnapSharpness = -30f;
 
     private CharacterMovement _characterMovement;
 
@@ -97,9 +98,17 @@ public class MS_Walking : AMovementState
         Vector3 targetMovementVelocity = reorientedInput * toMaxSpeed;
         if (!_characterMovement.CanMove) targetMovementVelocity = Vector3.zero;
 
-        _characterMovement.RB.velocity = Vector3.Lerp(_characterMovement.RB.velocity, targetMovementVelocity, 1f - Mathf.Exp(-_groundedMovementSharpness * Time.fixedDeltaTime));
+        //Snap character to appropriate groundY
+        GroundDetectionDescriptor ground = _characterMovement.GroundDetectionDescriptor;
 
-        Vector3 groundSnapForce = _characterMovement.GroundDetectionDescriptor.Normal * _groundSnapStrength;
+        Vector3 feetPosition = _characterMovement.RB.position;
+        float groundDistance = Vector3.Dot(feetPosition - ground.Point, ground.Normal);
+        float error = -groundDistance;
+
+        Vector3 correctionVelocity = ground.Normal * error * _groundSnapSharpness;
+        Vector3 groundSnapForce = ground.Normal * _groundSnapSharpness * error;
+
+        _characterMovement.RB.velocity = Vector3.Lerp(_characterMovement.RB.velocity, targetMovementVelocity, 1f - Mathf.Exp(-_groundedMovementSharpness * Time.fixedDeltaTime));
         _characterMovement.RB.velocity += groundSnapForce * Time.fixedDeltaTime;
     }
 }
