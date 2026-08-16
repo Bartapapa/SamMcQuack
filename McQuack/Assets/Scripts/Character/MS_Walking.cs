@@ -22,7 +22,7 @@ public class MS_Walking : AMovementState
     {
         base.OnStateEnter(character);
 
-        character.SetStateType(EMovementStates.Walking);
+        character.SetStateType(_stateEnum);
         _characterMovement = character;
     }
 

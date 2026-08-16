@@ -18,7 +18,7 @@ public class InputHandler : MonoBehaviour
 {
     [Header("Controlled objects")]
     [SerializeField] private CharacterMovement _character;
-    [SerializeField] private APlayerCamera _cam;
+    [SerializeField] private CameraManager _cam;
 
     private bool _jumpInputHeld = false;
 

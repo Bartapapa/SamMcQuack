@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -40,17 +41,22 @@ public class LedgeDetectionDescriptor
 
     public Vector3 GroundPoint;
     public Vector3 GroundNormal;
-    public float Height;
+    public float WallHitToGroundHitHeight;
 
-    public LedgeDetectionDescriptor(RaycastHit wallHit, RaycastHit groundHit, float height)
+    public Vector3 StandPoint;
+
+    public LedgeDetectionDescriptor(WallDetectionDescriptor wallHit, RaycastHit groundHit, float wallHitToGroundHitHeight, float standPointClearance)
     {
-        WallPoint = wallHit.point;
-        WallNormal = wallHit.normal;
+        WallPoint = wallHit.Point;
+        WallNormal = wallHit.Normal;
 
         GroundPoint = groundHit.point;
         GroundNormal = groundHit.normal;
 
-        Height = height;
+        WallHitToGroundHitHeight = wallHitToGroundHitHeight;
+
+        Vector3 ledgeHeightPoint = new Vector3(WallPoint.x, GroundPoint.y, WallPoint.z);
+        StandPoint = ledgeHeightPoint + (-WallNormal * standPointClearance);
     }
 }
 
@@ -76,9 +82,18 @@ public class EnvironmentDetector : MonoBehaviour
     public Vector3 WallCastOffset { get { return _wallCastOffset; } }
 
     [Header("LEDGE DETECTION")]
-    [SerializeField] private float _groundCheckForwardOffset = 1f;
-    [SerializeField] private float _maxLedgeHeight = 2.5f;
-    [SerializeField] private float _minLedgeHeight = .5f;
+    [SerializeField] private float _groundCheckForwardOffset = .1f;
+    [SerializeField] private float _maxLedgeHeight = 1.5f;
+    [SerializeField] private float _minLedgeHeight = .25f;
+    [SerializeField] private bool _showLedgeCheckDebug = true;
+
+    [Header("CAN FIT")]
+    [SerializeField] private float _bottomOffset = .25f;
+    [SerializeField] private bool _showCanFitDebug = true;
+    private Vector3 _debugStandingPosition;
+    private float _debugCapsuleRadius;
+    private float _debugCapsuleHeight;
+    private LayerMask _debugLayermask;
 
 
     public bool GroundCheck(float maxGroundAngle, float maxSlopeAngle, out GroundDetectionDescriptor ground)
@@ -124,22 +139,50 @@ public class EnvironmentDetector : MonoBehaviour
         return false;
     }
 
-    public bool LedgeCheck(Vector3 origin, Vector3 direction, out LedgeDetectionDescriptor ledge)
+    public bool LedgeCheck(Vector3 origin, Vector3 direction, float standPointClearance, float maximumLedgeSlope, out LedgeDetectionDescriptor ledge)
     {
         ledge = default;
+        bool check = false;
 
         if (!WallCheck(origin, direction, out WallDetectionDescriptor wallHit)) return false;
 
-        Vector3 groundCheckOrigin = wallHit.Point - (wallHit.Normal * _groundCheckForwardOffset) + (Vector3.up * _maxLedgeHeight);
+        Vector3 groundCheckOrigin = origin + Vector3.up * _maxLedgeHeight - wallHit.Normal * _groundCheckForwardOffset;
         if (!Physics.Raycast(groundCheckOrigin, Vector3.down, out RaycastHit groundHit, _maxLedgeHeight, _wallMask, QueryTriggerInteraction.Ignore)) return false;
 
         float height = groundHit.point.y - wallHit.Point.y;
         if (height < _minLedgeHeight || height > _maxLedgeHeight) return false;
 
         float slopeAngle = Vector3.Angle(groundHit.normal, Vector3.up);
+        if (slopeAngle > maximumLedgeSlope) return false;
 
+        ledge = new LedgeDetectionDescriptor(wallHit, groundHit, height, standPointClearance);
 
-        return false;
+        if (_showLedgeCheckDebug)
+        {
+            Debug.DrawRay(groundCheckOrigin, Vector3.down * (_maxLedgeHeight), Color.cyan);
+        }
+
+        check = true;
+        if (check && _showLedgeCheckDebug)
+        {
+            Debug.DrawRay(groundHit.point, groundHit.normal * .3f, Color.green);
+        }
+
+        return true;
+    }
+
+    public bool CanCharacterFit(Vector3 standPosition, float capsuleHeight, float capsuleRadius, LayerMask environmentMask)
+    {
+        _debugStandingPosition = standPosition;
+        _debugCapsuleHeight = capsuleHeight;
+        _debugCapsuleRadius = capsuleRadius;
+        _debugLayermask = environmentMask;
+
+        float cylinderHeight = capsuleHeight - 2f * capsuleRadius;
+        Vector3 bottom = standPosition + (Vector3.up * (capsuleRadius + _bottomOffset));
+        Vector3 top = standPosition + (Vector3.up * capsuleRadius) + (Vector3.up * cylinderHeight);
+
+        return !Physics.CheckCapsule(bottom, top, capsuleRadius, environmentMask, QueryTriggerInteraction.Ignore);
     }
 
     private void OnDrawGizmosSelected()
@@ -178,6 +221,28 @@ public class EnvironmentDetector : MonoBehaviour
             Gizmos.DrawWireSphere(origin + Vector3.down * _groundCheckDistance, _groundCheckRadius);
 
             Gizmos.DrawLine(origin, origin + Vector3.down * _groundCheckDistance);
+        }
+
+        if (_showCanFitDebug)
+        {
+            if (_debugStandingPosition != Vector3.zero)
+            {
+                if (CanCharacterFit(_debugStandingPosition, _debugCapsuleHeight, _debugCapsuleRadius, _debugLayermask))
+                {
+                    Gizmos.color = Color.green;
+                }
+                else
+                {
+                    Gizmos.color = Color.red;
+                }
+
+                Vector3 bottomOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleRadius) + (Vector3.up * _bottomOffset);
+                Vector3 topOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleHeight) - (Vector3.up * _debugCapsuleRadius);
+
+                Gizmos.DrawWireSphere(bottomOrigin, _debugCapsuleRadius);
+                Gizmos.DrawWireSphere(topOrigin, _debugCapsuleRadius);
+                Gizmos.DrawLine(bottomOrigin, topOrigin);
+            }
         }
     }
 }

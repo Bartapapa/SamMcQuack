@@ -31,7 +31,7 @@ public class MS_Jumping : AMovementState
     {
         base.OnStateEnter(character);
 
-        character.SetStateType(EMovementStates.Jumping);
+        character.SetStateType(_stateEnum);
         _characterMovement = character;
 
         float jumpInitialStrength = _jumpInitialStrength;

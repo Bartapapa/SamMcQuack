@@ -55,11 +55,6 @@ public class SplineMeshGenerator : MonoBehaviour
     [SerializeField]
     private bool stretchLastSection = true;
 
-    [Header("Source Mesh Axis")]
-    [Tooltip("The source mesh's local X axis represents its length.")]
-    [SerializeField]
-    private bool sourceMeshIsCenteredOnX = false;
-
     [Header("Output")]
     [SerializeField]
     private bool recalculateNormals = false;

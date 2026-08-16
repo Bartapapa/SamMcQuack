@@ -11,6 +11,8 @@ public enum EMovementStates
     Jumping,
     Balancing,
     Sliding,
+    Mantling,
+    LedgeGrabbing,
 }
 
 public class CharacterMovement : MonoBehaviour
@@ -18,6 +20,8 @@ public class CharacterMovement : MonoBehaviour
     [Header("OBJECT REFERENCES")]
     [SerializeField] private EnvironmentDetector _detector;
     public EnvironmentDetector Detector { get { return _detector; } }
+    private CameraManager _camManager;
+    public CameraManager CamManager { get { return _camManager; } }
 
     [Header("STATES")]
     [SerializeField] private AMovementState _currentState = null;
@@ -30,20 +34,55 @@ public class CharacterMovement : MonoBehaviour
     [SerializeField] private MS_Jumping _jumpingState;
     [SerializeField] private MS_Balancing _balancingState;
     [SerializeField] private MS_Sliding _slidingState;
+    [SerializeField] private MS_Mantle _mantlingState;
+    [SerializeField] private MS_LedgeGrab _ledgeGrabbingState;
+
+    [Header("ENVIRONMENT")]
+    [SerializeField] private LayerMask _environmentMask;
 
     [Header("GROUNDING")]
     [SerializeField] private float _maxGroundedAngle = 60f;
     public float MaxGroundedAngle { get { return _maxGroundedAngle; } }
+    private GroundDetectionDescriptor _groundDetectionDescriptor;
+    public GroundDetectionDescriptor GroundDetectionDescriptor { get { return _groundDetectionDescriptor; } }
+
+    //Grounding vars
+    private bool _isGrounded = false;
+    private bool _isGroundedPreviousFrame = false;
+    public bool IsGrounded { get { return _isGrounded; } }
+    private bool _groundDetected = false;
+    public bool GroundDetected { get { return _groundDetected; } }
+
+    //Jumping vars
+    public bool CanJump { get { return _groundDetected; } }
+    private bool _jumpInputHeld = false;
+    public bool JumpInputHeld { get { return _jumpInputHeld; } }
+
+    [Header("LEDGES")]
+    [SerializeField] private float _ledgeStandingPointClearance = .5f;
+    [SerializeField] private float _minimumLedgeGrabHeight = 2f;
+    [SerializeField] private float _grabToMantleMinimumAlignment = .5f;
+
+    //Ledgegrabbing & mantling vars
+    private LedgeDetectionDescriptor _ledgeDetectionDescriptor;
+    private bool _canMantle = false;
+    private bool _canGrabLedge = false;
 
     [Header("SLIDING")]
     [SerializeField] private float _maxSlopeAngle = 80f;
     public float MaxSlopeAngle { get { return _maxSlopeAngle; } }
+
+    //Sliding vars
+    private bool _slidePossible = false;
+    private float _slideRequestTimer = 0f;
 
     [Header("GENERAL PARAMETERS")]
     [SerializeField] private bool _canRotate = true;
     public bool CanRotate { get { return _canRotate; } }
     [SerializeField] private bool _canMove = true;
     public bool CanMove { get { return _canMove; } }
+
+    //General vars
     private Vector3 _forcedLookAtDir = Vector3.zero;
     public Vector3 ForcedLookAtDir { get { return _forcedLookAtDir; } }
 
@@ -57,23 +96,8 @@ public class CharacterMovement : MonoBehaviour
     private Vector3 _lookInputVector;
     public Vector3 LookInputVector { get { return _lookInputVector; } }
 
-    private GroundDetectionDescriptor _groundDetectionDescriptor;
-    public GroundDetectionDescriptor GroundDetectionDescriptor { get { return _groundDetectionDescriptor; } }
-    private bool _isGrounded = false;
-    private bool _isGroundedPreviousFrame = false;
-    public bool IsGrounded { get { return _isGrounded; } }
-    private bool _groundDetected = false;
-    public bool GroundDetected { get { return _groundDetected; } }
-
-    public bool CanJump { get { return _groundDetected; } }
-    private bool _jumpInputHeld = false;
-    public bool JumpInputHeld { get { return _jumpInputHeld; } }
-
-    private bool _slidePossible = false;
-    private float _slideRequestTimer = 0f;
-
-    private bool _canTransitionFromState = true;
-
+    public delegate void MovementStateTransitionEvent(EMovementStates from, EMovementStates to);
+    public event MovementStateTransitionEvent MovementStateTransitioned;
 
     private void Start()
     {
@@ -82,6 +106,8 @@ public class CharacterMovement : MonoBehaviour
 
     private void InitializeCharacterMovement()
     {
+        _camManager = CameraManager.Instance;
+
         _rb = GetComponent<Rigidbody>();
         if (_rb == null)
         {
@@ -101,19 +127,14 @@ public class CharacterMovement : MonoBehaviour
             case EMovementStates.Walking:
                 TransitionToState(_walkingState);
                 break;
-            case EMovementStates.Falling:
-                TransitionToState(_fallingState);
-                break;
-            case EMovementStates.Jumping:
-                TransitionToState(_jumpingState);
-                break;
-            case EMovementStates.Balancing:
-                TransitionToState(_balancingState);
-                break;
             default:
                 Debug.LogWarning(this.name + " doesn't have a valid default movement state.");
                 break;
         }
+
+        _camManager.InitializeCameraManagerFromState(_defaultState);
+        MovementStateTransitioned -= _camManager.OnMovementStateTransitioned;
+        MovementStateTransitioned += _camManager.OnMovementStateTransitioned;
     }
 
     private void Update()
@@ -126,7 +147,8 @@ public class CharacterMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        WallCheck();
+        //WallCheck();
+        LedgeCheck();
         GroundCheck();
 
         HandleStateTransitions();
@@ -148,6 +170,8 @@ public class CharacterMovement : MonoBehaviour
         }
         _currentState = toState;
         toState.OnStateEnter(this);
+
+        MovementStateTransitioned?.Invoke(oldState.StateEnum, toState.StateEnum);
     }
 
     public void SetStateType(EMovementStates type)
@@ -176,11 +200,7 @@ public class CharacterMovement : MonoBehaviour
                     StartBalance(balancePath);
                     break;
                 }
-                else
-                {
-                    TransitionToState(_walkingState);
-                    break;
-                }
+                break;
             case EMovementStates.Falling:
                 if (_isGrounded)
                 {
@@ -198,6 +218,12 @@ public class CharacterMovement : MonoBehaviour
                 }
                 else
                 {
+                    if (_canGrabLedge)
+                    {
+                        _ledgeGrabbingState.GrabLedge(_ledgeDetectionDescriptor, Capsule, false);
+                        TransitionToState(_ledgeGrabbingState);
+                    }
+
                     if (_slidePossible && (_slideRequestTimer >= _slidingState.SlideRequestTime || (_detector.FacingSlope() > .5f && _slideRequestTimer >= .2f)))
                     {
                         TransitionToState(_slidingState);
@@ -236,6 +262,28 @@ public class CharacterMovement : MonoBehaviour
                         TransitionToState(_walkingState);
                         break;
                     }
+                }
+                break;
+            case EMovementStates.Mantling:
+                if (_mantlingState.ElapsedTime >= _mantlingState.MantleDuration)
+                {
+                    TransitionToState(_walkingState);
+                    break;
+                }
+                break;
+            case EMovementStates.LedgeGrabbing:
+                if (_moveInputVector.sqrMagnitude < 0.001f || (_ledgeGrabbingState.ElapsedTime / _ledgeGrabbingState.LedgeGrabDuration) < 1) break;
+
+                Vector3 inputRight = Vector3.Cross(_moveInputVector, Vector3.up);
+                Vector3 reorientedInput = Vector3.Cross(Vector3.up, inputRight).normalized * _moveInputVector.magnitude;
+                Debug.DrawRay(transform.position + Vector3.up, reorientedInput);
+
+                float dot = Vector3.Dot(reorientedInput, -_ledgeDetectionDescriptor.WallNormal);
+                if (dot >= _grabToMantleMinimumAlignment)
+                {
+                    _mantlingState.SetLedgeDescriptor(_ledgeDetectionDescriptor);
+                    TransitionToState(_mantlingState);
+                    break;
                 }
                 break;
             default:
@@ -295,6 +343,34 @@ out WallDetectionDescriptor wall))
         }
     }
 
+    private void LedgeCheck()
+    {
+        if (_detector.LedgeCheck(transform.position + _detector.WallCastOffset, transform.forward, _ledgeStandingPointClearance, _maxGroundedAngle, out var ledge))
+        {
+            _ledgeDetectionDescriptor = ledge;
+
+            if (_detector.CanCharacterFit(ledge.StandPoint, _capsule.height, _capsule.radius, _environmentMask))
+            {
+                float ledgeHeightRelativeToPosition = ledge.WallHitToGroundHitHeight + _detector.WallCastOffset.y;
+                if (ledgeHeightRelativeToPosition <= _minimumLedgeGrabHeight)
+                {
+                    _canMantle = true;
+                    _canGrabLedge = false;
+                }
+                else
+                {
+                    _canMantle = false;
+                    _canGrabLedge = true;
+                }
+            }
+        }
+        else
+        {
+            _canMantle = false;
+            _canGrabLedge = false;
+        }
+    }
+
     #endregion
     #region INPUTS
     public void SetInputs(ref PlayerInput input)
@@ -316,10 +392,24 @@ out WallDetectionDescriptor wall))
 
     public void RequestJump()
     {
-        if (CanJump)
+        if (_canMantle)
         {
-            TransitionToState(_jumpingState);
+            _mantlingState.SetLedgeDescriptor(_ledgeDetectionDescriptor);
+            TransitionToState(_mantlingState);
         }
+        else if (_canGrabLedge)
+        {
+            _ledgeGrabbingState.GrabLedge(_ledgeDetectionDescriptor, Capsule);
+            TransitionToState(_ledgeGrabbingState);
+        }
+        else
+        {
+            if (CanJump)
+            {
+                TransitionToState(_jumpingState);
+            }
+        }
+
     }
     #endregion
     #region BALANCING

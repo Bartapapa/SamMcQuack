@@ -4,6 +4,10 @@ using UnityEngine;
 
 public abstract class AMovementState : MonoBehaviour
 {
+    [Header("MOVEMENT STATE VALUES")]
+    [SerializeField] protected EMovementStates _stateEnum;
+    public EMovementStates StateEnum { get { return _stateEnum; } }
+
     public virtual void OnStateEnter(CharacterMovement character)
     {
 

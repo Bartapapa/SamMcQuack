@@ -20,7 +20,7 @@ public class MS_Falling : AMovementState
     {
         base.OnStateEnter(character);
 
-        character.SetStateType(EMovementStates.Falling);
+        character.SetStateType(_stateEnum);
         _characterMovement = character;
     }
 

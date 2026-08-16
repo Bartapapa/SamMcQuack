@@ -140,7 +140,14 @@ MonoBehaviour:
   _jumpingState: {fileID: 4383146419040667067}
   _balancingState: {fileID: 6361523952779751565}
   _slidingState: {fileID: 1396806785505755481}
+  _mantlingState: {fileID: 2239774126280196682}
+  _ledgeGrabbingState: {fileID: 806103444970910014}
+  _environmentMask:
+    serializedVersion: 2
+    m_Bits: 1
   _maxGroundedAngle: 40
+  _ledgeStandingPointClearance: 0.5
+  _maxSlopeAngle: 80
   _canRotate: 1
   _canMove: 1
 --- !u!136 &8663827109222463901
@@ -218,10 +225,13 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   _wallCastOffset: {x: 0, y: 1.25, z: 0}
-  _showWallCheckDebug: 1
+  _showWallCheckDebug: 0
   _groundCheckForwardOffset: 1
   _maxLedgeHeight: 2.5
   _minLedgeHeight: 0.5
+  _showLedgeCheckDebug: 0
+  _bottomOffset: 0.25
+  _showCanFitDebug: 1
 --- !u!1 &915242680072961789
 GameObject:
   m_ObjectHideFlags: 0
@@ -444,8 +454,64 @@ Transform:
   - {fileID: 4223280604191731057}
   - {fileID: 1523241659801784509}
   - {fileID: 557121893312982296}
+  - {fileID: 2001554149556665343}
+  - {fileID: 2367944641084645339}
   m_Father: {fileID: 4587668576756797895}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2470317394500839950
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2367944641084645339}
+  - component: {fileID: 806103444970910014}
+  m_Layer: 3
+  m_Name: LedgeGrabbing
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2367944641084645339
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2470317394500839950}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8223713343525208484}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &806103444970910014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2470317394500839950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d89afbf0dd69a884d95a5fccf09f332f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _activeLedgeGrabDuration: 1
+  _passiveLedgeGrabDuration: 0.5
+  _ledgeGrabCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  _hangWallClearanceDistance: 0.25
+  _ledgeGrabRotationSharpness: 10
 --- !u!1 &3053900223450076734
 GameObject:
   m_ObjectHideFlags: 0
@@ -728,6 +794,78 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &7755456117395268074
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2001554149556665343}
+  - component: {fileID: 2239774126280196682}
+  m_Layer: 3
+  m_Name: Mantling
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2001554149556665343
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7755456117395268074}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8223713343525208484}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2239774126280196682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7755456117395268074}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2bf33443671d59240b58c338c25f87b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _mantleDuration: 1
+  _mantleCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 2
+      outSlope: 2
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  _mantleArcHeight: 2
+  _mantleWallClearanceDistance: 0.5
+  _mantleRotationSharpness: 10
 --- !u!1 &8085478586183033570
 GameObject:
   m_ObjectHideFlags: 0

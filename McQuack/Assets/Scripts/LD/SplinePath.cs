@@ -58,8 +58,6 @@ public class SplinePath : MonoBehaviour
     private int _samplesPerSegment = 20;
 
     [Header("DEBUG")]
-    [SerializeField]
-    private bool _drawDebug = true;
 
     [SerializeField]
     private Color _splineColor = Color.yellow;

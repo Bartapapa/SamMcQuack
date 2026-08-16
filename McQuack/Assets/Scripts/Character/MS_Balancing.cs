@@ -32,7 +32,7 @@ public class MS_Balancing : AMovementState
     {
         base.OnStateEnter(character);
 
-        character.SetStateType(EMovementStates.Balancing);
+        character.SetStateType(_stateEnum);
         _characterMovement = character;
 
         AnchorToCurrentPath();

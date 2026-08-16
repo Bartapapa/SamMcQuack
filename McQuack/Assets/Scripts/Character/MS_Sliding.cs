@@ -37,7 +37,7 @@ public class MS_Sliding : AMovementState
     {
         base.OnStateEnter(character);
 
-        character.SetStateType(EMovementStates.Sliding);
+        character.SetStateType(_stateEnum);
         _characterMovement = character;
 
         SetInitialSpeeds();
