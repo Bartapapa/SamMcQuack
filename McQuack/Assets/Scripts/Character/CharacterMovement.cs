@@ -49,6 +49,9 @@ public class CharacterMovement : MonoBehaviour
     [SerializeField] private LayerMask _environmentMask;
     public LayerMask EnvironmentMask { get { return _environmentMask; } }
 
+    [Header("GENERAL MOVEMENT")]
+    [SerializeField] private AnimationCurve _directionalInfluenceCurve;
+
     [Header("GROUNDING")]
     [SerializeField] private float _maxGroundedAngle = 60f;
     public float MaxGroundedAngle { get { return _maxGroundedAngle; } }
@@ -424,6 +427,19 @@ out WallDetectionDescriptor wall))
         _capsule.center = capsuleParams.CapsuleCenter;
         _capsule.height = capsuleParams.CapsuleHeight;
         _capsule.radius = capsuleParams.CapsuleRadius;
+    }
+
+    #endregion
+    #region GENERAL MOVEMENT
+
+    public float GetDirectionalInfluence(Vector3 inputRight)
+    {
+        Vector3 forward = transform.forward;
+        Vector3 reorientedInput = Vector3.Cross(transform.up, inputRight).normalized;
+        float dot = Vector3.Dot(reorientedInput, transform.forward);
+        float directionalInfluence = _directionalInfluenceCurve.Evaluate(dot);
+
+        return directionalInfluence;
     }
 
     #endregion

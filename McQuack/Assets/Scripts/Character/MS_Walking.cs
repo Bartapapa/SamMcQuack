@@ -25,6 +25,8 @@ public class MS_Walking : AMovementState
 
         character.SetStateType(_stateEnum);
         _characterMovement = character;
+
+        _characterMovement.RB.velocity = new Vector3(_characterMovement.RB.velocity.x, 0f, _characterMovement.RB.velocity.z);
     }
 
     public override void OnStateExit(CharacterMovement character)
@@ -95,7 +97,8 @@ public class MS_Walking : AMovementState
 
         //Set velocity, add inheritedVelocity given by pushes and moving pillars.
         float toMaxSpeed = _maxGroundedMoveSpeed;
-        Vector3 targetMovementVelocity = reorientedInput * toMaxSpeed;
+        float directionalInfluence = _characterMovement.GetDirectionalInfluence(inputRight);
+        Vector3 targetMovementVelocity = reorientedInput * toMaxSpeed * directionalInfluence;
         if (!_characterMovement.CanMove) targetMovementVelocity = Vector3.zero;
 
         //Snap character to appropriate groundY
@@ -105,7 +108,6 @@ public class MS_Walking : AMovementState
         float groundDistance = Vector3.Dot(feetPosition - ground.Point, ground.Normal);
         float error = -groundDistance;
 
-        Vector3 correctionVelocity = ground.Normal * error * _groundSnapSharpness;
         Vector3 groundSnapForce = ground.Normal * _groundSnapSharpness * error;
 
         _characterMovement.RB.velocity = Vector3.Lerp(_characterMovement.RB.velocity, targetMovementVelocity, 1f - Mathf.Exp(-_groundedMovementSharpness * Time.fixedDeltaTime));
