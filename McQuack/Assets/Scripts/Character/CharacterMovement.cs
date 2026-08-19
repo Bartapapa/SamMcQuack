@@ -13,6 +13,7 @@ public enum EMovementStates
     Sliding,
     Mantling,
     LedgeGrabbing,
+    Crouching,
 }
 
 public class CharacterMovement : MonoBehaviour
@@ -22,6 +23,12 @@ public class CharacterMovement : MonoBehaviour
     public EnvironmentDetector Detector { get { return _detector; } }
     private CameraManager _camManager;
     public CameraManager CamManager { get { return _camManager; } }
+    [SerializeField] private Transform _mesh;
+    public Transform Mesh { get { return _mesh; } }
+
+    [Header("CAPSULE")]
+    private CapsuleParameterDescriptor _capsuleOriginalParams;
+    public CapsuleParameterDescriptor CapsuleOriginalParameters { get { return _capsuleOriginalParams; } }
 
     [Header("STATES")]
     [SerializeField] private AMovementState _currentState = null;
@@ -36,9 +43,11 @@ public class CharacterMovement : MonoBehaviour
     [SerializeField] private MS_Sliding _slidingState;
     [SerializeField] private MS_Mantle _mantlingState;
     [SerializeField] private MS_LedgeGrab _ledgeGrabbingState;
+    [SerializeField] private MS_Crouching _crouchingState;
 
     [Header("ENVIRONMENT")]
     [SerializeField] private LayerMask _environmentMask;
+    public LayerMask EnvironmentMask { get { return _environmentMask; } }
 
     [Header("GROUNDING")]
     [SerializeField] private float _maxGroundedAngle = 60f;
@@ -85,6 +94,15 @@ public class CharacterMovement : MonoBehaviour
     public bool CanRotate { get { return _canRotate; } }
     [SerializeField] private bool _canMove = true;
     public bool CanMove { get { return _canMove; } }
+    private bool _canCrouch { get {
+            return
+                _isGrounded &&
+                _currentStateType != EMovementStates.Balancing &&
+                _currentStateType != EMovementStates.Sliding &&
+                _currentStateType != EMovementStates.Mantling &&
+                _currentStateType != EMovementStates.LedgeGrabbing;
+        } }
+    public bool CanCrouch { get { return _canCrouch; } }
 
     //General vars
     private Vector3 _forcedLookAtDir = Vector3.zero;
@@ -99,6 +117,9 @@ public class CharacterMovement : MonoBehaviour
     public Vector3 MoveInputVector { get { return _moveInputVector; } }
     private Vector3 _lookInputVector;
     public Vector3 LookInputVector { get { return _lookInputVector; } }
+
+    private bool _uncrouchRequested = false;
+    public bool UncrouchRequested { get { return _uncrouchRequested; } }
 
     public delegate void MovementStateTransitionEvent(EMovementStates from, EMovementStates to);
     public event MovementStateTransitionEvent MovementStateTransitioned;
@@ -123,6 +144,13 @@ public class CharacterMovement : MonoBehaviour
             Debug.LogWarning(this.name + " doesn't have a CapsuleCollider!");
             return;
         }
+
+        _capsuleOriginalParams = new CapsuleParameterDescriptor()
+        {
+            CapsuleHeight = _capsule.height,
+            CapsuleRadius = _capsule.radius,
+            CapsuleCenter = _capsule.center,
+        };
 
         switch (_defaultState)
         {
@@ -286,6 +314,13 @@ public class CharacterMovement : MonoBehaviour
                     break;
                 }
                 break;
+            case EMovementStates.Crouching:
+                if (_uncrouchRequested && _crouchingState.UncrouchAttemptSuccess)
+                {
+                    _uncrouchRequested = false;
+                    TransitionToState(_walkingState);
+                }
+                break;
             default:
                 break;
         }
@@ -352,10 +387,20 @@ out WallDetectionDescriptor wall))
         {
             _ledgeDetectionDescriptor = ledge;
 
-            if (_detector.CanCharacterFit(ledge.StandPoint, _capsule.height, _capsule.radius, _environmentMask))
+            CapsuleParameterDescriptor capsuleParams = new CapsuleParameterDescriptor()
             {
-                float ledgeHeightRelativeToPosition = ledge.WallHitToGroundHitHeight + _detector.WallCastOffset.y - _groundDetectionDescriptor.Point.y;
-                if (ledgeHeightRelativeToPosition <= _minimumLedgeGrabHeight)
+                CapsuleHeight = _capsule.height,
+                CapsuleRadius = _capsule.radius,
+                CapsuleCenter = _capsule.center,
+            };
+
+            if (_detector.CanCharacterFit(ledge.StandPoint, capsuleParams, _environmentMask))
+            {
+                float ledgeHeightRelativeToPosition = ledge.WallHitToGroundHitHeight + _detector.WallCastOffset.y;
+                if (ledgeHeightRelativeToPosition <= _minimumLedgeGrabHeight &&
+                    _currentStateType != EMovementStates.Crouching &&
+                    _currentStateType != EMovementStates.Mantling &&
+                    _currentStateType != EMovementStates.LedgeGrabbing)
                 {
                     _canMantle = true;
                     _canGrabLedge = false;
@@ -372,6 +417,13 @@ out WallDetectionDescriptor wall))
             _canMantle = false;
             _canGrabLedge = false;
         }
+    }
+
+    public void ApplyCapsuleParams(CapsuleParameterDescriptor capsuleParams)
+    {
+        _capsule.center = capsuleParams.CapsuleCenter;
+        _capsule.height = capsuleParams.CapsuleHeight;
+        _capsule.radius = capsuleParams.CapsuleRadius;
     }
 
     #endregion
@@ -414,12 +466,31 @@ out WallDetectionDescriptor wall))
         }
 
     }
+
+    public void RequestCrouch()
+    {
+        if (_currentStateType == EMovementStates.Crouching)
+        {
+            _uncrouchRequested = true;
+        }
+        else if (_canCrouch)
+        {
+            TransitionToState(_crouchingState);
+        }
+    }
     #endregion
     #region BALANCING
     public void StartBalance(BalancePath balancePath)
     {
         _balancingState.UseBalancePath(balancePath);
         TransitionToState(_balancingState);
+    }
+    #endregion
+    #region DEBUG
+    public void SwitchToCrouchingMesh(bool isCrouching)
+    {
+        float toScale = isCrouching ? .5f : 1f;
+        _mesh.localScale = new Vector3(1f, toScale, 1f);
     }
     #endregion
 }

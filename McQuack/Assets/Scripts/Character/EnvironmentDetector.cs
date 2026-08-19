@@ -3,6 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+[System.Serializable]
+public class CapsuleParameterDescriptor
+{
+    public float CapsuleHeight;
+    public float CapsuleRadius;
+    public Vector3 CapsuleCenter;
+}
+
 public class GroundDetectionDescriptor
 {
     public Vector3 Point;
@@ -89,8 +97,7 @@ public class EnvironmentDetector : MonoBehaviour
     [SerializeField] private float _bottomOffset = .25f;
     [SerializeField] private bool _showCanFitDebug = true;
     private Vector3 _debugStandingPosition;
-    private float _debugCapsuleRadius;
-    private float _debugCapsuleHeight;
+    private CapsuleParameterDescriptor _debugCapsuleParams;
     private LayerMask _debugLayermask;
 
 
@@ -169,11 +176,13 @@ public class EnvironmentDetector : MonoBehaviour
         return true;
     }
 
-    public bool CanCharacterFit(Vector3 standPosition, float capsuleHeight, float capsuleRadius, LayerMask environmentMask)
+    public bool CanCharacterFit(Vector3 standPosition, CapsuleParameterDescriptor capsuleDescriptor, LayerMask environmentMask)
     {
+        float capsuleHeight = capsuleDescriptor.CapsuleHeight;
+        float capsuleRadius = capsuleDescriptor.CapsuleRadius;
+
         _debugStandingPosition = standPosition;
-        _debugCapsuleHeight = capsuleHeight;
-        _debugCapsuleRadius = capsuleRadius;
+        _debugCapsuleParams = capsuleDescriptor;
         _debugLayermask = environmentMask;
 
         float cylinderHeight = capsuleHeight - 2f * capsuleRadius;
@@ -225,7 +234,7 @@ public class EnvironmentDetector : MonoBehaviour
         {
             if (_debugStandingPosition != Vector3.zero)
             {
-                if (CanCharacterFit(_debugStandingPosition, _debugCapsuleHeight, _debugCapsuleRadius, _debugLayermask))
+                if (CanCharacterFit(_debugStandingPosition, _debugCapsuleParams, _debugLayermask))
                 {
                     Gizmos.color = Color.green;
                 }
@@ -234,11 +243,11 @@ public class EnvironmentDetector : MonoBehaviour
                     Gizmos.color = Color.red;
                 }
 
-                Vector3 bottomOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleRadius) + (Vector3.up * _bottomOffset);
-                Vector3 topOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleHeight) - (Vector3.up * _debugCapsuleRadius);
+                Vector3 bottomOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleParams.CapsuleRadius) + (Vector3.up * _bottomOffset);
+                Vector3 topOrigin = _debugStandingPosition + (Vector3.up * _debugCapsuleParams.CapsuleHeight) - (Vector3.up * _debugCapsuleParams.CapsuleRadius);
 
-                Gizmos.DrawWireSphere(bottomOrigin, _debugCapsuleRadius);
-                Gizmos.DrawWireSphere(topOrigin, _debugCapsuleRadius);
+                Gizmos.DrawWireSphere(bottomOrigin, _debugCapsuleParams.CapsuleRadius);
+                Gizmos.DrawWireSphere(topOrigin, _debugCapsuleParams.CapsuleRadius);
                 Gizmos.DrawLine(bottomOrigin, topOrigin);
             }
         }

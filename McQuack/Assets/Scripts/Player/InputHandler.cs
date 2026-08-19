@@ -62,6 +62,14 @@ public class InputHandler : MonoBehaviour
         }
     }
 
+    public void OnCrouch(InputAction.CallbackContext context)
+    {
+        if (context.performed)
+        {
+            _character.RequestCrouch();
+        }
+    }
+
     private void SendPlayerInputs()
     {
         PlayerInput playerInput = new PlayerInput();
